@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ACLS Escape Room Quiz</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 0 16px; line-height: 1.5; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 20px; margin: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .hidden { display: none; }
+    .choices button { display: block; width: 100%; margin: 8px 0; padding: 12px; border-radius: 10px; border: 1px solid #bbb; background: #fff; cursor: pointer; text-align: left; }
+    .choices button:hover { background: #f5f5f5; }
+    .ok { color: #0a7a2f; font-weight: bold; }
+    .bad { color: #b00020; font-weight: bold; }
+    .topbar { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .small { color: #666; font-size: 14px; }
+    img.ecg { max-width: 100%; border: 1px solid #ddd; border-radius: 8px; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>ACLS Escape Room Quiz</h1>
+  <div class="small">โหมด: ตอบถูกจึงผ่าน / ตอบผิดไม่เฉลย / ข้อผิดจะกลับมาทำใหม่ตอนท้าย</div>
+
+  <div id="login" class="card">
+    <label>ชื่อผู้เรียน <input id="playerName" type="text" placeholder="เช่น Student 01" /></label>
+    <button onclick="startQuiz()">เริ่มเกม</button>
+  </div>
+
+  <div id="quiz" class="hidden">
+    <div class="card topbar">
+      <div><strong id="progress"></strong></div>
+      <div><strong>เวลา:</strong> <span id="timer">00:00</span></div>
+      <div><strong>ผู้เล่น:</strong> <span id="who"></span></div>
+    </div>
+
+    <div id="questionCard" class="card"></div>
+    <div id="feedback" class="card hidden"></div>
+  </div>
+
+  <div id="finish" class="hidden card">
+    <h2>ผ่านด่าน</h2>
+    <p>เวลารวม: <strong id="finalTime"></strong></p>
+    <p>จำนวนครั้งที่ตอบผิด: <strong id="wrongCount"></strong></p>
+    <h3>Leaderboard (เครื่องนี้)</h3>
+    <table id="board"></table>
+    <button onclick="location.reload()">เริ่มใหม่</button>
+  </div>
+
+<script>
+const questions = [
+  {
+    id: 1,
+    stem: 'ชาย 65 ปี หมดสติ ไม่ตอบสนอง และหายใจเฮือก สิ่งที่ต้องทำถัดไปคืออะไร?',
+    choices: ['คลำชีพจร 30 วินาที', 'เริ่มกดหน้าอกทันที', 'ให้ออกซิเจนก่อน', 'ตามญาติ'],
+    answer: 1
+  },
+  {
+    id: 2,
+    stem: 'ผู้ป่วยไม่ตอบสนอง แต่ยังหายใจปกติ แนวทางที่เหมาะสมคืออะไร?',
+    choices: ['เริ่ม CPR', 'จัดท่า recovery position และเฝ้าระวัง', 'ช็อกไฟฟ้าทันที', 'ให้ epinephrine'],
+    answer: 1
+  },
+  {
+    id: 3,
+    stem: 'Maximum interruption ของ chest compression ที่ยอมรับได้คือเท่าใด?',
+    choices: ['5 วินาที', '10 วินาที', '20 วินาที', '30 วินาที'],
+    answer: 1
+  },
+  {
+    id: 4,
+    stem: 'VF ที่ monitor แนวทางแรกที่ถูกต้องที่สุดคืออะไร?',
+    choices: ['ให้ epinephrine', 'เริ่ม CPR อย่างเดียว', 'defibrillation', 'ใส่ท่อช่วยหายใจ'],
+    answer: 2,
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Ventricular_fibrillation.png/640px-Ventricular_fibrillation.png'
+  },
+  {
+    id: 5,
+    stem: 'PEA แนวทางถัดไปที่เหมาะสมที่สุดคืออะไร?',
+    choices: ['Shock', 'CPR + epinephrine', 'Amiodarone', 'Adenosine'],
+    answer: 1
+  },
+  {
+    id: 6,
+    stem: 'หลัง shock เสร็จควรทำอะไรทันที?',
+    choices: ['เช็ค pulse ทันที', 'ทำ CPR ต่อทันที', 'ให้ atropine', 'ทำ synchronized cardioversion'],
+    answer: 1
+  },
+  {
+    id: 7,
+    stem: 'Asystole ที่เห็นบน monitor แนวทางที่เหมาะสมที่สุดคืออะไร?',
+    choices: ['Defibrillation', 'CPR และ epinephrine พร้อมหาสาเหตุแก้ไขได้', 'Adenosine', 'Synchronized cardioversion'],
+    answer: 1,
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Asystole.svg/640px-Asystole.svg.png'
+  },
+  {
+    id: 8,
+    stem: 'HR 30 bpm, BP 80/50, ซึม การรักษาเริ่มต้นที่เหมาะสมที่สุดคืออะไร?',
+    choices: ['สังเกตอาการ', 'Atropine', 'Adenosine', 'Defibrillation'],
+    answer: 1
+  },
+  {
+    id: 9,
+    stem: 'ข้อใดเข้ากับ unstable tachycardia มากที่สุด?',
+    choices: ['HR > 150', 'chest pain หรือ hypotension', 'QRS กว้าง', 'อายุ > 60 ปี'],
+    answer: 1
+  },
+  {
+    id: 10,
+    stem: 'Stable narrow-complex tachycardia, HR 180 แนวทางแรกคืออะไร?',
+    choices: ['Shock', 'Vagal maneuver', 'Amiodarone', 'Epinephrine'],
+    answer: 1,
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Supraventricular_tachycardia.png/640px-Supraventricular_tachycardia.png'
+  },
+  {
+    id: 11,
+    stem: 'Wide-complex tachycardia ร่วมกับความดันต่ำและ altered mental status ควรทำอะไร?',
+    choices: ['Adenosine ก่อน', 'Synchronized cardioversion', 'ให้ atropine', 'สังเกตอาการ'],
+    answer: 1
+  },
+  {
+    id: 12,
+    stem: 'ระหว่าง CPR ตัวชี้วัดคุณภาพ CPR ที่มีประโยชน์มากคืออะไร?',
+    choices: ['SpO2', 'Heart rate', 'End-tidal CO2', 'Temperature'],
+    answer: 2
+  },
+  {
+    id: 13,
+    stem: 'ใน PEA สิ่งสำคัญมากที่ต้องทำควบคู่กับ CPR คืออะไร?',
+    choices: ['Shock ทันที', 'หาสาเหตุที่แก้ไขได้ (reversible causes)', 'ให้ adenosine', 'ทำ vagal maneuver'],
+    answer: 1
+  },
+  {
+    id: 14,
+    stem: 'หลัง ROSC แล้ว BP 80/40 ควรทำอะไรถัดไป?',
+    choices: ['Observe', 'ให้สารน้ำ/vasopressor ตามเหมาะสม', 'Shock', 'Adenosine'],
+    answer: 1
+  },
+  {
+    id: 15,
+    stem: 'ผู้ป่วยยังไม่รู้สึกตัวหลัง ROSC ควรพิจารณาอะไร?',
+    choices: ['Discharge', 'Targeted temperature management / active temperature control', 'Adenosine', 'Defibrillation'],
+    answer: 1
+  }
+];
+
+let queue = [];
+let reviewQueue = [];
+let currentIndex = 0;
+let wrong = 0;
+let startedAt = null;
+let timerHandle = null;
+let player = '';
+
+function startQuiz() {
+  player = document.getElementById('playerName').value.trim() || 'Anonymous';
+  document.getElementById('who').textContent = player;
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('quiz').classList.remove('hidden');
+  queue = [...questions];
+  reviewQueue = [];
+  currentIndex = 0;
+  wrong = 0;
+  startedAt = Date.now();
+  timerHandle = setInterval(updateTimer, 1000);
+  renderQuestion();
+}
+
+function updateTimer() {
+  const sec = Math.floor((Date.now() - startedAt) / 1000);
+  const mm = String(Math.floor(sec / 60)).padStart(2, '0');
+  const ss = String(sec % 60).padStart(2, '0');
+  document.getElementById('timer').textContent = `${mm}:${ss}`;
+}
+
+function renderQuestion() {
+  const total = questions.length + reviewQueue.length;
+  const q = queue[currentIndex];
+  document.getElementById('progress').textContent = `ข้อ ${currentIndex + 1} / ${queue.length}${reviewQueue.length ? ' + review' : ''}`;
+  const card = document.getElementById('questionCard');
+  let html = `<h2>${q.stem}</h2>`;
+  if (q.image) html += `<img class="ecg" src="${q.image}" alt="ECG image">`;
+  html += `<div class="choices">`;
+  q.choices.forEach((c, idx) => {
+    html += `<button onclick="answer(${idx})">${String.fromCharCode(65+idx)}. ${c}</button>`;
+  });
+  html += `</div>`;
+  card.innerHTML = html;
+  document.getElementById('feedback').classList.add('hidden');
+}
+
+function answer(idx) {
+  const q = queue[currentIndex];
+  const feedback = document.getElementById('feedback');
+  feedback.classList.remove('hidden');
+  if (idx === q.answer) {
+    feedback.innerHTML = `<div class="ok">ถูกต้อง ✅ ผ่านข้อนี้</div>`;
+    setTimeout(nextQuestion, 600);
+  } else {
+    wrong += 1;
+    if (!reviewQueue.find(x => x.id === q.id) && currentIndex < questions.length) reviewQueue.push(q);
+    feedback.innerHTML = `<div class="bad">ยังไม่ผ่านข้อนี้ ❌ จะกลับมาทำใหม่ตอนท้าย</div>`;
+    setTimeout(nextQuestion, 900);
+  }
+}
+
+function nextQuestion() {
+  currentIndex += 1;
+  if (currentIndex >= queue.length) {
+    if (queue === reviewQueue || reviewQueue.length === 0) {
+      return finishQuiz();
+    }
+    queue = [...reviewQueue];
+    reviewQueue = [];
+    currentIndex = 0;
+  }
+  renderQuestion();
+}
+
+function finishQuiz() {
+  clearInterval(timerHandle);
+  const sec = Math.floor((Date.now() - startedAt) / 1000);
+  const mm = String(Math.floor(sec / 60)).padStart(2, '0');
+  const ss = String(sec % 60).padStart(2, '0');
+  document.getElementById('quiz').classList.add('hidden');
+  document.getElementById('finish').classList.remove('hidden');
+  document.getElementById('finalTime').textContent = `${mm}:${ss}`;
+  document.getElementById('wrongCount').textContent = wrong;
+
+  const data = JSON.parse(localStorage.getItem('acls_board') || '[]');
+  data.push({ name: player, timeSec: sec, wrong });
+  data.sort((a,b) => a.timeSec - b.timeSec || a.wrong - b.wrong);
+  localStorage.setItem('acls_board', JSON.stringify(data.slice(0,10)));
+
+  const table = document.getElementById('board');
+  table.innerHTML = '<tr><th>#</th><th>Name</th><th>Time</th><th>Wrong</th></tr>' + data.slice(0,10).map((r,i) => {
+    const mm = String(Math.floor(r.timeSec / 60)).padStart(2, '0');
+    const ss = String(r.timeSec % 60).padStart(2, '0');
+    return `<tr><td>${i+1}</td><td>${r.name}</td><td>${mm}:${ss}</td><td>${r.wrong}</td></tr>`;
+  }).join('');
+}
+</script>
+</body>
+</html>
